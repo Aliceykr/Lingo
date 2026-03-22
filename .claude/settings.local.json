@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker exec:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(curl -s 'https://raw.githubusercontent.com/mahavivo/english-wordlists/master/CET4_edited.txt')",
+      "Bash(node test/import-cet4.js)",
+      "Bash(curl -s 'https://raw.githubusercontent.com/mahavivo/english-wordlists/master/CET6_edited.txt')",
+      "Bash(node test/import-cet6.js)",
+      "Bash(curl -s \"http://localhost:3002/api/wordbooks/3/study?user_id=1&algorithm=sm2&limit=3\")",
+      "Bash(node -e \"let d='''''''';process.stdin.on\\(''''data'''',c=>d+=c\\);process.stdin.on\\(''''end'''',\\(\\)=>{const r=JSON.parse\\(d\\);console.log\\(''''study返回'''',r.length,''''个单词''''\\);console.log\\(r[0].word, r[0].translation.substring\\(0,20\\)\\)}\\)\")",
+      "Bash(curl -s -X POST http://localhost:3002/api/words/1/review -H 'Content-Type: application/json' -d '{\"\"user_id\"\":1,\"\"algorithm\"\":\"\"sm2\"\",\"\"quality\"\":4}')",
+      "Bash(node test/test-all.js)",
+      "Bash(npm install:*)",
+      "Bash(netstat -ano)",
+      "Bash(curl -s -X POST http://localhost:3002/api/auth/login -H 'Content-Type: application/json' -d '{\"\"username\"\":\"\"alice\"\",\"\"password\"\":\"\"123456\"\"}')"
+    ]
+  }
+}
