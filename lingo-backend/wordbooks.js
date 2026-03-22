@@ -214,8 +214,96 @@ app.post('/api/words/:id/review', authMiddleware, async (req, res) => {
        result.difficulty ?? progress.difficulty ?? 5.0,
        result.leitner_box ?? progress.leitner_box ?? 1]
     );
+
+    // 记录每次复习日志（每次都插入新行）
+    await connection.query(
+      `INSERT IGNORE INTO review_log (user_id, word_id, algorithm, quality, reviewed_at)
+       VALUES (?, ?, ?, ?, NOW())`,
+      [user_id, id, algorithm, quality]
+    ).catch(() => {}); // review_log 表不存在时静默失败
+
     connection.release();
     res.json({ next_review_at: result.next_review_at, interval_days: result.interval_days });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 今日学习统计（学习词数 + 复习词数）
+// GET /api/stats/today
+app.get('/api/stats/today', authMiddleware, async (req, res) => {
+  try {
+    const user_id = req.user.user_id;
+    const connection = await pool.getConnection();
+
+    // 今日复习总词数
+    const [reviewedRows] = await connection.query(
+      `SELECT COUNT(DISTINCT word_id) as reviewed
+       FROM word_progress
+       WHERE user_id = ? AND DATE(last_review_at) = CURDATE()`,
+      [user_id]
+    );
+
+    // 今日新学（review_count = 1 且今日）
+    const [newRows] = await connection.query(
+      `SELECT COUNT(DISTINCT word_id) as new_learned
+       FROM word_progress
+       WHERE user_id = ? AND review_count = 1 AND DATE(last_review_at) = CURDATE()`,
+      [user_id]
+    );
+
+    connection.release();
+    res.json({
+      today_reviewed: reviewedRows[0].reviewed,
+      today_new: newRows[0].new_learned
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 今日错误最多的单词（quality 低的）
+// GET /api/stats/hard-words
+app.get('/api/stats/hard-words', authMiddleware, async (req, res) => {
+  try {
+    const user_id = req.user.user_id;
+    const connection = await pool.getConnection();
+
+    // 用 review_log 表查今日 quality <= 2 的单词，按出现次数排序
+    let rows = [];
+    try {
+      const [logRows] = await connection.query(
+        `SELECT w.word, w.translation, COUNT(*) as error_count
+         FROM review_log rl
+         JOIN words w ON rl.word_id = w.id
+         WHERE rl.user_id = ? AND rl.quality <= 2 AND DATE(rl.reviewed_at) = CURDATE()
+         GROUP BY rl.word_id
+         ORDER BY error_count DESC
+         LIMIT 3`,
+        [user_id]
+      );
+      rows = logRows;
+    } catch (e) {
+      rows = [];
+    }
+
+    // 降级：用今日复习过的单词中 ease_factor 最低的
+    if (!rows || rows.length === 0) {
+      const [fallback] = await connection.query(
+        `SELECT w.word, w.translation, wp.ease_factor
+         FROM word_progress wp
+         JOIN words w ON wp.word_id = w.id
+         WHERE wp.user_id = ? AND DATE(wp.last_review_at) = CURDATE()
+         ORDER BY wp.ease_factor ASC
+         LIMIT 3`,
+        [user_id]
+      );
+      connection.release();
+      return res.json(fallback || []);
+    }
+
+    connection.release();
+    res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -299,13 +387,22 @@ app.get('/api/stats', authMiddleware, async (req, res) => {
       [user_id]
     );
 
+    // 平均复习间隔（掌握程度指标）
+    const [intervalRows] = await connection.query(
+      `SELECT ROUND(AVG(interval_days), 1) as avg_interval
+       FROM word_progress
+       WHERE user_id = ? AND interval_days > 0`,
+      [user_id]
+    );
+
     connection.release();
     res.json({
       total_learned: totalRows[0].total,
       today_reviewed: todayRows[0].today,
       due_for_review: dueRows[0].due,
       streak_days: streakRows[0].streak,
-      by_algorithm: accuracyRows
+      by_algorithm: accuracyRows,
+      avg_interval: intervalRows[0].avg_interval ?? 0
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

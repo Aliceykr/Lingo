@@ -1,30 +1,60 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '../api'
+import AppIcon from '../components/AppIcon.vue'
+import IOSSegmentedControl from '../components/IOSSegmentedControl.vue'
+import { AUTH_MODE_OPTIONS } from '../constants/ui'
+import type { AuthMode, AuthResponse } from '../types/models'
+import { readApiError } from '../utils/errors'
+
+interface AuthFormState {
+  username: string
+  password: string
+}
 
 const router = useRouter()
-const username = ref('')
-const password = ref('')
+const mode = ref<AuthMode>('login')
 const loading = ref(false)
-const isLogin = ref(true)
-const error = ref('')
+const errorMessage = ref('')
+const form = reactive<AuthFormState>({
+  username: '',
+  password: ''
+})
 
-async function submit() {
-  if (!username.value || !password.value) {
-    error.value = '请填写用户名和密码'
+const titleText = computed(() => (mode.value === 'login' ? '登录 Lingo' : '创建账户'))
+const actionText = computed(() => (mode.value === 'login' ? '继续' : '创建账户'))
+const helperText = computed(() =>
+  mode.value === 'login'
+    ? '使用你的词书继续今天的学习节奏。'
+    : '创建一个新账户，开始建立你的记忆系统。'
+)
+
+watch(mode, () => {
+  errorMessage.value = ''
+})
+
+async function submit(): Promise<void> {
+  if (!form.username.trim() || !form.password.trim()) {
+    errorMessage.value = '请输入用户名和密码。'
     return
   }
-  error.value = ''
+
   loading.value = true
+  errorMessage.value = ''
+
   try {
-    const url = isLogin.value ? '/auth/login' : '/auth/register'
-    const res = await api.post(url, { username: username.value, password: password.value })
-    localStorage.setItem('token', res.data.token)
-    localStorage.setItem('username', res.data.username)
-    router.push('/wordbooks')
-  } catch (err: any) {
-    error.value = err.response?.data?.error || '操作失败，请重试'
+    const endpoint = mode.value === 'login' ? '/auth/login' : '/auth/register'
+    const response = await api.post<AuthResponse>(endpoint, {
+      username: form.username.trim(),
+      password: form.password
+    })
+
+    localStorage.setItem('token', response.data.token)
+    localStorage.setItem('username', response.data.username)
+    await router.replace({ name: 'wordbooks' })
+  } catch (error) {
+    errorMessage.value = readApiError(error, '暂时无法完成认证，请稍后重试。')
   } finally {
     loading.value = false
   }
@@ -32,192 +62,349 @@ async function submit() {
 </script>
 
 <template>
-  <div class="login-page">
-    <div class="login-content">
-      <!-- Logo -->
-      <div class="logo-area">
-        <div class="logo-icon">📖</div>
-        <h1 class="app-name">Lingo</h1>
-        <p class="app-desc">智能背单词，科学记忆</p>
+  <div class="auth-page">
+    <!-- 左侧品牌区 -->
+    <div class="auth-brand glass-surface">
+      <div class="traffic-lights" aria-hidden="true">
+        <span class="traffic-light traffic-light--red" />
+        <span class="traffic-light traffic-light--yellow" />
+        <span class="traffic-light traffic-light--green" />
       </div>
 
-      <!-- Tab -->
-      <div class="tab-bar">
-        <button :class="['tab', isLogin && 'active']" @click="isLogin = true; error = ''">登录</button>
-        <button :class="['tab', !isLogin && 'active']" @click="isLogin = false; error = ''">注册</button>
+      <div class="brand-hero">
+        <span class="brand-mark-lg">
+          <AppIcon name="sparkles" :size="28" />
+        </span>
+        <p class="brand-kicker">Language Memory OS</p>
+        <h1 class="brand-title">Lingo</h1>
+        <p class="brand-desc">以 macOS 桌面风格组织单词学习、回忆与间隔复习。</p>
       </div>
 
-      <!-- Form -->
-      <div class="form-card">
-        <div class="form-group">
-          <label>用户名</label>
-          <input v-model="username" type="text" placeholder="请输入用户名" class="ios-input" autocomplete="username" />
+      <ul class="feature-list">
+        <li>
+          <span class="feature-dot feature-dot--blue" />
+          SM-2 间隔复习算法，科学安排每日复习队列
+        </li>
+        <li>
+          <span class="feature-dot feature-dot--green" />
+          多词书管理，随时切换学习目标
+        </li>
+        <li>
+          <span class="feature-dot feature-dot--purple" />
+          统计看板，追踪连续天数与算法分布
+        </li>
+      </ul>
+
+      <p class="brand-footnote">系统字体 · 毛玻璃层次 · 连续圆角 · 接近原生 App 的交互触感</p>
+    </div>
+
+    <!-- 右侧表单区 -->
+    <div class="auth-form-wrap">
+      <div class="auth-panel glass-surface">
+        <IOSSegmentedControl
+          v-model="mode"
+          :options="AUTH_MODE_OPTIONS"
+          aria-label="切换登录或注册"
+        />
+
+        <section class="auth-copy">
+          <h2 class="auth-title">{{ titleText }}</h2>
+          <p class="auth-subtitle">{{ helperText }}</p>
+        </section>
+
+        <div class="inset-group form-group">
+          <label class="field-row">
+            <span class="field-label">用户名</span>
+            <input
+              v-model="form.username"
+              type="text"
+              class="field-input"
+              placeholder="输入用户名"
+              autocomplete="username"
+            />
+          </label>
+
+          <label class="field-row">
+            <span class="field-label">密码</span>
+            <input
+              v-model="form.password"
+              type="password"
+              class="field-input"
+              placeholder="输入密码"
+              autocomplete="current-password"
+              @keyup.enter="submit"
+            />
+          </label>
         </div>
-        <div class="divider" />
-        <div class="form-group">
-          <label>密码</label>
-          <input v-model="password" type="password" placeholder="请输入密码" class="ios-input" @keyup.enter="submit" />
-        </div>
+
+        <p v-if="errorMessage" class="error-banner">
+          {{ errorMessage }}
+        </p>
+
+        <button
+          type="button"
+          class="ios-button ios-button--primary submit-button pressable"
+          :disabled="loading"
+          @click="submit"
+        >
+          {{ loading ? '处理中...' : actionText }}
+        </button>
       </div>
-
-      <!-- Error -->
-      <p v-if="error" class="error-msg">{{ error }}</p>
-
-      <!-- Submit -->
-      <button class="submit-btn" :disabled="loading" @click="submit">
-        <span v-if="!loading">{{ isLogin ? '登录' : '创建账号' }}</span>
-        <span v-else class="loading-dots">···</span>
-      </button>
     </div>
   </div>
 </template>
 
 <style scoped>
-.login-page {
-  min-height: 100vh;
-  background: linear-gradient(160deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+/* ── 页面容器 ── */
+.auth-page {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 18px;
+  gap: 18px;
+}
+
+/* ── 左侧品牌栏 ── */
+.auth-brand {
+  border-radius: 30px;
+  padding: 28px;
+  display: grid;
+  grid-template-rows: auto 1fr auto auto;
+  gap: 0;
+}
+
+.traffic-lights {
+  display: inline-flex;
+  gap: 8px;
+  margin-bottom: 0;
+}
+
+.traffic-light {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.35);
+}
+
+.traffic-light--red   { background: #ff5f57; }
+.traffic-light--yellow{ background: #febc2e; }
+.traffic-light--green { background: #28c840; }
+
+.brand-hero {
+  display: grid;
+  gap: 0.55rem;
+  align-self: center;
+  padding: 2rem 0;
+}
+
+.brand-mark-lg {
+  width: 4rem;
+  height: 4rem;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 1.375rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0.34)),
+    rgba(10, 132, 255, 0.14);
+  color: var(--accent-blue);
+  box-shadow: 0 20px 36px rgba(10, 132, 255, 0.2);
+}
+
+.brand-kicker {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--label-tertiary);
+  margin: 0.8rem 0 0;
+}
+
+.brand-title {
+  font-size: clamp(2.4rem, 4vw, 3.6rem);
+  line-height: 1.0;
+  letter-spacing: -0.05em;
+  margin: 0;
+}
+
+.brand-desc {
+  max-width: 22rem;
+  font-size: 1rem;
+  line-height: 1.65;
+  color: var(--label-secondary);
+  margin: 0;
+}
+
+.feature-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 14px;
+  align-self: end;
+  padding-bottom: 2rem;
+}
+
+.feature-list li {
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding: 24px;
+  gap: 12px;
+  font-size: 0.94rem;
+  color: var(--label-secondary);
+  line-height: 1.5;
 }
 
-.login-content {
-  width: 100%;
-  max-width: 360px;
+.feature-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
-.logo-area {
-  text-align: center;
-  margin-bottom: 40px;
+.feature-dot--blue   { background: var(--accent-blue); }
+.feature-dot--green  { background: var(--accent-green); }
+.feature-dot--purple { background: var(--accent-purple); }
+
+.brand-footnote {
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: var(--label-quaternary);
+  margin: 0;
 }
 
-.logo-icon {
-  font-size: 64px;
-  margin-bottom: 12px;
-  filter: drop-shadow(0 4px 16px rgba(0,122,255,0.4));
+/* ── 右侧表单区 ── */
+.auth-form-wrap {
+  display: grid;
+  place-items: center;
 }
 
-.app-name {
-  font-size: 36px;
-  font-weight: 700;
-  color: #FFFFFF;
-  letter-spacing: -0.5px;
-  margin-bottom: 6px;
+.auth-panel {
+  width: min(100%, 420px);
+  padding: 28px;
+  border-radius: 30px;
 }
 
-.app-desc {
-  font-size: 15px;
-  color: rgba(255,255,255,0.55);
-  letter-spacing: 0.2px;
+.auth-copy {
+  display: grid;
+  gap: 0.35rem;
+  margin: 1.4rem 0 1rem;
 }
 
-.tab-bar {
-  display: flex;
-  background: rgba(255,255,255,0.1);
-  border-radius: 12px;
-  padding: 3px;
-  margin-bottom: 16px;
+.auth-title {
+  font-size: 1.65rem;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  margin: 0;
 }
 
-.tab {
-  flex: 1;
-  padding: 9px;
-  border: none;
-  background: transparent;
-  color: rgba(255,255,255,0.6);
-  font-size: 15px;
-  font-weight: 600;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-family: inherit;
-}
-
-.tab.active {
-  background: rgba(255,255,255,0.15);
-  color: #FFFFFF;
-}
-
-.form-card {
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 16px;
-  overflow: hidden;
-  backdrop-filter: blur(20px);
-  margin-bottom: 12px;
+.auth-subtitle {
+  font-size: 0.98rem;
+  line-height: 1.55;
+  color: var(--label-secondary);
+  margin: 0;
 }
 
 .form-group {
-  padding: 4px 16px;
+  margin-top: 1rem;
 }
 
-.form-group label {
-  display: block;
-  font-size: 12px;
+.field-row {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.9rem 1.125rem;
+}
+
+.field-row + .field-row {
+  border-top: 1px solid var(--separator-soft);
+}
+
+.field-label {
+  font-size: 0.78rem;
   font-weight: 600;
-  color: rgba(255,255,255,0.45);
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 2px;
-  margin-top: 10px;
+  color: var(--label-tertiary);
 }
 
-.ios-input {
+.field-input {
   width: 100%;
-  background: transparent;
-  border: none;
-  padding: 6px 0 10px;
-  font-size: 17px;
-  font-family: inherit;
-  color: #FFFFFF;
-  outline: none;
+  font-size: var(--type-body);
+  line-height: 1.3;
 }
 
-.ios-input::placeholder {
-  color: rgba(255,255,255,0.25);
+.error-banner {
+  margin-top: 0.9rem;
+  padding: 0.8rem 1rem;
+  border-radius: 1rem;
+  background: rgba(255, 59, 48, 0.12);
+  color: var(--accent-red);
+  font-size: 0.92rem;
 }
 
-.divider {
-  height: 1px;
-  background: rgba(255,255,255,0.08);
-  margin: 0 16px;
-}
-
-.error-msg {
-  color: #FF6B6B;
-  font-size: 14px;
-  text-align: center;
-  margin-bottom: 12px;
-}
-
-.submit-btn {
+.submit-button {
   width: 100%;
-  padding: 16px;
-  background: #007AFF;
-  color: white;
-  border: none;
-  border-radius: 14px;
-  font-size: 17px;
-  font-weight: 600;
-  font-family: inherit;
-  cursor: pointer;
-  transition: opacity 0.15s, transform 0.1s;
-  letter-spacing: -0.2px;
+  margin-top: 1rem;
 }
 
-.submit-btn:active {
-  opacity: 0.8;
-  transform: scale(0.98);
+/* ── 响应式：中等屏幕 ── */
+@media (max-width: 900px) {
+  .auth-page {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+    padding: 14px;
+    gap: 14px;
+  }
+
+  .auth-brand {
+    grid-template-rows: auto auto;
+    padding: 22px 24px;
+    min-height: unset;
+  }
+
+  .brand-hero {
+    padding: 1.2rem 0 0;
+  }
+
+  .feature-list {
+    display: none;
+  }
+
+  .brand-footnote {
+    display: none;
+  }
+
+  .auth-form-wrap {
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
+  }
 }
 
-.submit-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+/* ── 响应式：小屏手机 ── */
+@media (max-width: 560px) {
+  .auth-brand {
+    border-radius: 22px;
+    padding: 18px 20px;
+  }
+
+  .auth-panel {
+    border-radius: 22px;
+    padding: 20px;
+  }
+
+  .brand-title {
+    font-size: 2rem;
+  }
 }
 
-.loading-dots {
-  letter-spacing: 4px;
-  font-size: 20px;
+/* ── 暗色模式 ── */
+@media (prefers-color-scheme: dark) {
+  .brand-mark-lg {
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.04)),
+      rgba(10, 132, 255, 0.24);
+    box-shadow: 0 20px 38px rgba(10, 132, 255, 0.24);
+  }
+
+  .error-banner {
+    background: rgba(255, 69, 58, 0.16);
+  }
 }
 </style>

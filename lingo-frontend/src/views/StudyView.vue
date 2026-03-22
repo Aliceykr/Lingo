@@ -1,335 +1,573 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import api from '../api'
-
-interface Word { id: number; word: string; translation: string }
+import AppIcon from '../components/AppIcon.vue'
+import IOSAppShell from '../components/IOSAppShell.vue'
+import IOSSegmentedControl from '../components/IOSSegmentedControl.vue'
+import { ALGORITHM_LABELS, APP_TABS, STUDY_ALGORITHM_OPTIONS } from '../constants/ui'
+import type { StudyAlgorithm, StudyWord } from '../types/models'
+import { readApiError } from '../utils/errors'
 
 const route = useRoute()
 const router = useRouter()
-const wordbookId = route.params.id as string
 
-const words = ref<Word[]>([])
-const current = ref(0)
+const words = ref<StudyWord[]>([])
+const currentIndex = ref(0)
 const showAnswer = ref(false)
 const loading = ref(true)
-const algorithm = ref('sm2')
 const submitting = ref(false)
 const done = ref(false)
+const errorMessage = ref('')
+const algorithm = ref<StudyAlgorithm>(
+  (localStorage.getItem('setting-algorithm') as StudyAlgorithm) || 'sm2'
+)
 
-const algorithmOptions = [
-  { label: 'SM-2', value: 'sm2' },
-  { label: '艾宾浩斯', value: 'ebbinghaus' },
-  { label: 'FSRS', value: 'fsrs' },
-  { label: 'Leitner', value: 'leitner' }
-]
+let loadVersion = 0
 
-async function loadWords() {
+const wordbookId = computed(() => String(route.params.id ?? ''))
+const currentWord = computed(() => words.value[currentIndex.value] ?? null)
+const algorithmLabel = computed(() => ALGORITHM_LABELS[algorithm.value])
+const progressPercent = computed(() => {
+  if (words.value.length === 0) {
+    return done.value ? 100 : 0
+  }
+
+  const completedCount = done.value ? words.value.length : currentIndex.value
+  return Math.round((completedCount / words.value.length) * 100)
+})
+
+const reviewedCount = computed(() => (done.value ? words.value.length : currentIndex.value))
+
+async function loadWords(): Promise<void> {
+  const version = ++loadVersion
   loading.value = true
+  submitting.value = false
   showAnswer.value = false
-  current.value = 0
+  currentIndex.value = 0
   done.value = false
+  errorMessage.value = ''
+
+  const limit = Number(localStorage.getItem('setting-limit') || 20)
+
   try {
-    const res = await api.get(`/wordbooks/${wordbookId}/study`, {
-      params: { algorithm: algorithm.value, limit: 20 }
+    const response = await api.get<StudyWord[]>(`/wordbooks/${wordbookId.value}/study`, {
+      params: {
+        algorithm: algorithm.value,
+        limit
+      }
     })
-    words.value = res.data
-    if (words.value.length === 0) done.value = true
+
+    if (version !== loadVersion) {
+      return
+    }
+
+    words.value = response.data
+    done.value = response.data.length === 0
+  } catch (error) {
+    if (version !== loadVersion) {
+      return
+    }
+
+    errorMessage.value = readApiError(error, '当前学习批次无法加载，请稍后重试。')
   } finally {
-    loading.value = false
+    if (version === loadVersion) {
+      loading.value = false
+    }
   }
 }
 
-async function review(quality: number) {
-  if (submitting.value) return
+async function review(quality: number): Promise<void> {
+  if (submitting.value || !currentWord.value) {
+    return
+  }
+
   submitting.value = true
+
   try {
-    await api.post(`/words/${words.value[current.value].id}/review`, {
+    await api.post(`/words/${currentWord.value.id}/review`, {
       algorithm: algorithm.value,
       quality
     })
-    if (current.value + 1 < words.value.length) {
-      current.value++
+
+    if (currentIndex.value < words.value.length - 1) {
+      currentIndex.value += 1
       showAnswer.value = false
+      errorMessage.value = ''
     } else {
       done.value = true
     }
+  } catch (error) {
+    errorMessage.value = readApiError(error, '提交复习结果失败，请重试。')
   } finally {
     submitting.value = false
   }
 }
 
-const progress = () => words.value.length > 0 ? Math.round((current.value / words.value.length) * 100) : 0
-
-onMounted(loadWords)
+watch([wordbookId, algorithm], () => {
+  void loadWords()
+}, { immediate: true })
 </script>
 
 <template>
-  <div class="page">
-    <!-- Navbar -->
-    <div class="navbar">
-      <button class="back-btn" @click="router.push('/wordbooks')">‹ 返回</button>
-      <select v-model="algorithm" class="algo-select" @change="loadWords">
-        <option v-for="o in algorithmOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
-      </select>
-    </div>
+  <IOSAppShell
+    large-title="学习桌面"
+    :subtitle="algorithmLabel"
+    active-tab="wordbooks"
+    :tabs="APP_TABS"
+    :content-key="'study-' + wordbookId"
+  >
+    <template #nav-leading>
+      <button type="button" class="back-chip pressable" @click="router.push({ name: 'wordbooks' })">
+        <AppIcon name="chevron-left" :size="16" />
+        <span>返回词书</span>
+      </button>
+    </template>
 
-    <!-- Loading -->
-    <div v-if="loading" class="center">
-      <div class="spinner" />
-    </div>
+    <template #nav-trailing>
+      <button type="button" class="refresh-chip pressable" @click="loadWords">
+        重新取卡
+      </button>
+    </template>
 
-    <!-- Done -->
-    <div v-else-if="done" class="done-screen">
-      <div class="done-icon">🎉</div>
-      <h2 class="done-title">今日任务完成！</h2>
-      <p class="done-desc">继续保持，明天见</p>
-      <button class="primary-btn" @click="router.push('/wordbooks')">返回单词本</button>
-    </div>
-
-    <!-- Study -->
-    <div v-else class="study">
-      <!-- Progress -->
-      <div class="progress-area">
-        <div class="progress-bar">
-          <div class="progress-fill" :style="{ width: progress() + '%' }" />
-        </div>
-        <span class="progress-text">{{ current + 1 }} / {{ words.length }}</span>
+    <template #sidebar-footer>
+      <div class="session-footer">
+        <p class="session-footer__label">当前算法</p>
+        <strong>{{ algorithmLabel }}</strong>
+        <span>{{ reviewedCount }} / {{ words.length || 20 }} 已完成</span>
       </div>
+    </template>
 
-      <!-- Card -->
-      <div class="word-card" :class="{ flipped: showAnswer }">
-        <div class="card-front" v-if="!showAnswer">
-          <p class="word-label">单词</p>
-          <h1 class="word-text">{{ words[current]?.word }}</h1>
-          <button class="show-btn" @click="showAnswer = true">显示释义</button>
-        </div>
-        <div class="card-back" v-else>
-          <p class="word-label">释义</p>
-          <h1 class="word-text">{{ words[current]?.word }}</h1>
-          <p class="translation">{{ words[current]?.translation }}</p>
-        </div>
+    <template #hero>
+      <div class="hero-grid">
+        <article class="hero-card glass-surface">
+          <p class="hero-label">学习进度</p>
+          <strong class="hero-value">{{ progressPercent }}%</strong>
+          <div class="hero-progress">
+            <span :style="{ width: `${progressPercent}%` }" />
+          </div>
+        </article>
+
+        <article class="hero-card glass-surface hero-card--wide">
+          <p class="hero-label">复习算法</p>
+          <IOSSegmentedControl
+            v-model="algorithm"
+            :options="STUDY_ALGORITHM_OPTIONS"
+            :compact="true"
+            aria-label="选择复习算法"
+          />
+        </article>
       </div>
+    </template>
 
-      <!-- Actions -->
-      <div v-if="showAnswer" class="actions">
-        <button class="action-btn danger" :disabled="submitting" @click="review(1)">
-          <span class="action-icon">😓</span>
-          <span>不认识</span>
+    <div v-if="loading" class="state-card glass-surface">
+      <span class="ios-spinner" aria-hidden="true" />
+      <p>正在准备学习卡片。</p>
+    </div>
+
+    <div v-else-if="errorMessage && !currentWord && !done" class="state-card glass-surface">
+      <p class="state-title">学习批次不可用</p>
+      <p class="state-body">{{ errorMessage }}</p>
+      <button type="button" class="ios-button ios-button--secondary pressable" @click="loadWords">
+        重新加载
+      </button>
+    </div>
+
+    <div v-else-if="done" class="state-card glass-surface completion-card">
+      <p class="state-label">Session Complete</p>
+      <h2 class="state-title">今天的复习已经结束</h2>
+      <p class="state-body">桌面模式下建议直接切去统计页查看本轮完成情况。</p>
+      <div class="completion-actions">
+        <button type="button" class="ios-button ios-button--secondary pressable" @click="loadWords">
+          再来一组
         </button>
-        <button class="action-btn warning" :disabled="submitting" @click="review(3)">
-          <span class="action-icon">🤔</span>
-          <span>模糊</span>
-        </button>
-        <button class="action-btn success" :disabled="submitting" @click="review(5)">
-          <span class="action-icon">😄</span>
-          <span>认识</span>
+        <button type="button" class="ios-button ios-button--primary pressable" @click="router.push({ name: 'stats' })">
+          查看统计
         </button>
       </div>
     </div>
-  </div>
+
+    <section v-else class="study-layout">
+      <aside class="study-inspector glass-surface">
+        <div class="inspector-block">
+          <p class="state-label">当前状态</p>
+          <div class="inspector-metrics">
+            <div>
+              <span>已完成</span>
+              <strong>{{ reviewedCount }}</strong>
+            </div>
+            <div>
+              <span>剩余</span>
+              <strong>{{ Math.max(words.length - reviewedCount, 0) }}</strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="inspector-block">
+          <p class="state-label">操作顺序</p>
+          <ol class="instruction-list">
+            <li>先阅读单词，在脑内完成回忆。</li>
+            <li>点击显示释义，确认答案是否匹配。</li>
+            <li>根据熟悉程度选择右侧按钮提交。</li>
+          </ol>
+        </div>
+
+        <div class="inspector-block">
+          <p class="state-label">评分说明</p>
+          <div class="grade-guide">
+            <span class="grade grade--danger">没想起来</span>
+            <span class="grade grade--warning">有点模糊</span>
+            <span class="grade grade--success">记住了</span>
+          </div>
+        </div>
+      </aside>
+
+      <div class="study-stage">
+        <article class="flashcard glass-surface">
+          <p class="flashcard-label">{{ showAnswer ? '释义' : '单词' }}</p>
+          <h2 class="flashcard-word">{{ currentWord?.word }}</h2>
+
+          <Transition name="answer-fade" mode="out-in">
+            <p v-if="showAnswer" key="translation" class="flashcard-translation">
+              {{ currentWord?.translation }}
+            </p>
+            <p v-else key="hint" class="flashcard-hint">
+              在桌面端，建议先完整思考 2 到 3 秒，再翻面确认。
+            </p>
+          </Transition>
+        </article>
+
+        <p v-if="errorMessage" class="inline-error">{{ errorMessage }}</p>
+
+        <button
+          v-if="!showAnswer"
+          type="button"
+          class="ios-button ios-button--primary reveal-button pressable"
+          @click="showAnswer = true"
+        >
+          显示释义
+        </button>
+
+        <div v-else class="review-row">
+          <button
+            type="button"
+            class="review-button review-button--danger pressable"
+            :disabled="submitting"
+            @click="review(1)"
+          >
+            <AppIcon name="xmark-circle" :size="20" />
+            <span>没想起来</span>
+          </button>
+
+          <button
+            type="button"
+            class="review-button review-button--warning pressable"
+            :disabled="submitting"
+            @click="review(3)"
+          >
+            <AppIcon name="question-circle" :size="20" />
+            <span>有点模糊</span>
+          </button>
+
+          <button
+            type="button"
+            class="review-button review-button--success pressable"
+            :disabled="submitting"
+            @click="review(5)"
+          >
+            <AppIcon name="check-circle" :size="20" />
+            <span>记住了</span>
+          </button>
+        </div>
+      </div>
+    </section>
+  </IOSAppShell>
 </template>
 
 <style scoped>
-.page {
-  max-width: 430px;
-  margin: 0 auto;
-  padding: 0 20px 40px;
-  min-height: 100vh;
-  background: #F2F2F7;
-}
-
-.navbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 56px 0 16px;
-}
-
-.back-btn {
-  background: none;
-  border: none;
-  font-size: 17px;
-  color: #007AFF;
-  font-family: inherit;
-  cursor: pointer;
-  font-weight: 500;
-  padding: 0;
-}
-
-.algo-select {
-  background: #FFFFFF;
-  border: none;
-  border-radius: 10px;
-  padding: 8px 12px;
-  font-size: 14px;
-  font-family: inherit;
-  color: #1C1C1E;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-  cursor: pointer;
-  outline: none;
-}
-
-.center {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 60vh;
-}
-
-.spinner {
-  width: 36px;
-  height: 36px;
-  border: 3px solid #E5E5EA;
-  border-top-color: #007AFF;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin { to { transform: rotate(360deg); } }
-
-.done-screen {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 70vh;
-  text-align: center;
-}
-
-.done-icon { font-size: 80px; margin-bottom: 24px; }
-.done-title { font-size: 28px; font-weight: 700; color: #1C1C1E; margin-bottom: 8px; }
-.done-desc { font-size: 16px; color: #8E8E93; margin-bottom: 40px; }
-
-.primary-btn {
-  background: #007AFF;
-  color: white;
-  border: none;
+.back-chip,
+.refresh-chip {
+  min-height: 40px;
+  padding: 0 16px;
   border-radius: 14px;
-  padding: 16px 32px;
-  font-size: 17px;
-  font-weight: 600;
-  font-family: inherit;
-  cursor: pointer;
-  transition: opacity 0.15s, transform 0.1s;
-}
-.primary-btn:active { opacity: 0.8; transform: scale(0.97); }
-
-.study { display: flex; flex-direction: column; gap: 20px; }
-
-.progress-area {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+  background: var(--fill-quaternary);
+  color: var(--label-secondary);
+  font-size: 0.92rem;
+  font-weight: 600;
 }
 
-.progress-bar {
-  flex: 1;
-  height: 6px;
-  background: #E5E5EA;
-  border-radius: 3px;
+.session-footer {
+  padding: 16px;
+  border-radius: 20px;
+  background: var(--fill-quaternary);
+  display: grid;
+  gap: 4px;
+}
+
+.session-footer__label,
+.hero-label,
+.state-label {
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--label-tertiary);
+}
+
+.session-footer span,
+.state-body,
+.flashcard-hint,
+.flashcard-translation {
+  color: var(--label-secondary);
+  line-height: 1.6;
+}
+
+.hero-grid {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 18px;
+}
+
+.hero-card {
+  padding: 20px 22px;
+  border-radius: 26px;
+  display: grid;
+  gap: 14px;
+}
+
+.hero-card--wide {
+  align-content: center;
+}
+
+.hero-value {
+  font-size: 2rem;
+  line-height: 1;
+  letter-spacing: -0.05em;
+}
+
+.hero-progress {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--fill-tertiary);
   overflow: hidden;
 }
 
-.progress-fill {
+.hero-progress span {
+  display: block;
   height: 100%;
-  background: #007AFF;
-  border-radius: 3px;
-  transition: width 0.4s ease;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent-blue), rgba(94, 92, 230, 0.92));
+  transition: width 380ms var(--ease-spring);
 }
 
-.progress-text {
-  font-size: 14px;
-  color: #8E8E93;
-  font-weight: 500;
-  white-space: nowrap;
+.study-layout {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 18px;
 }
 
-.word-card {
-  background: #FFFFFF;
-  border-radius: 24px;
-  padding: 48px 32px;
-  text-align: center;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.08);
-  min-height: 320px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.study-inspector,
+.flashcard {
+  border-radius: 28px;
 }
 
-.card-front, .card-back {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-  width: 100%;
+.study-inspector {
+  padding: 22px;
+  display: grid;
+  align-content: start;
+  gap: 22px;
 }
 
-.word-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: #8E8E93;
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-}
-
-.word-text {
-  font-size: 42px;
-  font-weight: 700;
-  color: #1C1C1E;
-  letter-spacing: -1px;
-}
-
-.translation {
-  font-size: 18px;
-  color: #3C3C43;
-  line-height: 1.6;
-  max-width: 280px;
-}
-
-.show-btn {
-  margin-top: 8px;
-  background: #F2F2F7;
-  border: none;
-  border-radius: 12px;
-  padding: 12px 28px;
-  font-size: 16px;
-  font-weight: 600;
-  color: #007AFF;
-  font-family: inherit;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.show-btn:active { background: #E5E5EA; }
-
-.actions {
-  display: flex;
+.inspector-metrics {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
-.action-btn {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 16px 8px;
-  border: none;
+.inspector-metrics div {
+  padding: 14px;
   border-radius: 18px;
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: transform 0.1s, opacity 0.15s;
-  color: white;
+  background: var(--surface-elevated);
+  display: grid;
+  gap: 4px;
 }
 
-.action-btn:active { transform: scale(0.95); }
-.action-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.inspector-metrics span {
+  color: var(--label-tertiary);
+  font-size: 0.82rem;
+}
 
-.action-btn.danger { background: #FF3B30; }
-.action-btn.warning { background: #FF9500; }
-.action-btn.success { background: #34C759; }
+.inspector-metrics strong {
+  font-size: 1.35rem;
+}
 
-.action-icon { font-size: 24px; }
+.instruction-list {
+  margin: 12px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 10px;
+  color: var(--label-secondary);
+  line-height: 1.55;
+}
+
+.grade-guide {
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.grade {
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.grade--danger {
+  background: rgba(255, 59, 48, 0.12);
+  color: var(--accent-red);
+}
+
+.grade--warning {
+  background: rgba(255, 159, 10, 0.12);
+  color: var(--accent-orange);
+}
+
+.grade--success {
+  background: rgba(48, 209, 88, 0.12);
+  color: var(--accent-green);
+}
+
+.study-stage {
+  display: grid;
+  gap: 16px;
+}
+
+.flashcard {
+  min-height: 440px;
+  padding: 40px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 18px;
+  text-align: center;
+}
+
+.flashcard-label {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--label-tertiary);
+}
+
+.flashcard-word {
+  margin: 0;
+  font-size: clamp(3rem, 5vw, 4.4rem);
+  line-height: 0.95;
+  letter-spacing: -0.06em;
+}
+
+.flashcard-translation,
+.flashcard-hint {
+  max-width: 32rem;
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.reveal-button {
+  width: fit-content;
+  min-width: 180px;
+}
+
+.review-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.review-button {
+  min-height: 72px;
+  padding: 0 18px;
+  border-radius: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: white;
+  font-size: 0.94rem;
+  font-weight: 700;
+}
+
+.review-button--danger {
+  background: linear-gradient(180deg, rgba(255, 107, 97, 0.96), rgba(255, 59, 48, 0.92));
+}
+
+.review-button--warning {
+  background: linear-gradient(180deg, rgba(255, 184, 73, 0.96), rgba(255, 159, 10, 0.92));
+}
+
+.review-button--success {
+  background: linear-gradient(180deg, rgba(52, 199, 89, 0.96), rgba(48, 209, 88, 0.92));
+}
+
+.inline-error {
+  margin: 0;
+  color: var(--accent-red);
+}
+
+.state-title {
+  margin: 0;
+  font-size: 1.35rem;
+  line-height: 1.15;
+}
+
+.completion-card {
+  gap: 12px;
+}
+
+.completion-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.answer-fade-enter-active,
+.answer-fade-leave-active {
+  transition:
+    transform 260ms var(--ease-spring),
+    opacity 220ms var(--ease-spring);
+}
+
+.answer-fade-enter-from,
+.answer-fade-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+@media (max-width: 1180px) {
+  .hero-grid,
+  .study-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .review-row {
+    grid-template-columns: 1fr;
+  }
+
+  .flashcard {
+    padding: 28px 20px;
+  }
+}
 </style>

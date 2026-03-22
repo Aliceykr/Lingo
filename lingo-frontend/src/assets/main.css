@@ -1,0 +1,325 @@
+:root {
+  color-scheme: light dark;
+  --font-family-system:
+    -apple-system,
+    BlinkMacSystemFont,
+    "SF Pro Text",
+    "SF Pro Display",
+    "苹方-简",
+    "PingFang SC",
+    sans-serif;
+  --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
+  --duration-xs: 180ms;
+  --duration-s: 320ms;
+  --duration-m: 520ms;
+  --type-large-title: 2.125rem;
+  --type-headline: 1.0625rem;
+  --type-body: 1.0625rem;
+  --radius-xl: 2rem;
+  --radius-lg: 1.75rem;
+  --radius-md: 1.375rem;
+  --radius-sm: 1rem;
+  --accent-blue: #0a84ff;
+  --accent-green: #30d158;
+  --accent-orange: #ff9f0a;
+  --accent-red: #ff3b30;
+  --accent-purple: #bf5af2;
+  --bg-canvas: #f2f2f7;
+  --bg-gradient-top: rgba(255, 255, 255, 0.96);
+  --bg-gradient-bottom: rgba(233, 240, 255, 0.82);
+  --surface-primary: rgba(255, 255, 255, 0.74);
+  --surface-secondary: rgba(255, 255, 255, 0.88);
+  --surface-elevated: rgba(255, 255, 255, 0.92);
+  --fill-tertiary: rgba(118, 118, 128, 0.16);
+  --fill-quaternary: rgba(118, 118, 128, 0.12);
+  --label-primary: #111114;
+  --label-secondary: rgba(60, 60, 67, 0.78);
+  --label-tertiary: rgba(60, 60, 67, 0.56);
+  --label-quaternary: rgba(60, 60, 67, 0.34);
+  --separator-soft: rgba(60, 60, 67, 0.12);
+  --separator-strong: rgba(60, 60, 67, 0.2);
+  --glass-border: rgba(255, 255, 255, 0.48);
+  --glass-shadow: 0 28px 60px rgba(16, 24, 40, 0.08);
+  --shadow-card: 0 16px 32px rgba(15, 23, 42, 0.08);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --accent-blue: #0a84ff;
+    --accent-green: #32d74b;
+    --accent-orange: #ff9f0a;
+    --accent-red: #ff453a;
+    --accent-purple: #bf5af2;
+    --bg-canvas: #000000;
+    --bg-gradient-top: rgba(24, 28, 34, 0.96);
+    --bg-gradient-bottom: rgba(11, 14, 20, 0.98);
+    --surface-primary: rgba(28, 28, 30, 0.68);
+    --surface-secondary: rgba(36, 36, 38, 0.86);
+    --surface-elevated: rgba(44, 44, 46, 0.92);
+    --fill-tertiary: rgba(118, 118, 128, 0.24);
+    --fill-quaternary: rgba(118, 118, 128, 0.18);
+    --label-primary: rgba(255, 255, 255, 0.96);
+    --label-secondary: rgba(235, 235, 245, 0.72);
+    --label-tertiary: rgba(235, 235, 245, 0.48);
+    --label-quaternary: rgba(235, 235, 245, 0.28);
+    --separator-soft: rgba(84, 84, 88, 0.44);
+    --separator-strong: rgba(84, 84, 88, 0.64);
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --glass-shadow: 0 28px 60px rgba(0, 0, 0, 0.28);
+    --shadow-card: 0 18px 34px rgba(0, 0, 0, 0.24);
+  }
+}
+
+/* 手动切换：浅色 */
+[data-theme="light"] {
+  color-scheme: light;
+  --bg-canvas: #f2f2f7;
+  --bg-gradient-top: rgba(255, 255, 255, 0.96);
+  --bg-gradient-bottom: rgba(233, 240, 255, 0.82);
+  --surface-primary: rgba(255, 255, 255, 0.74);
+  --surface-secondary: rgba(255, 255, 255, 0.88);
+  --surface-elevated: rgba(255, 255, 255, 0.92);
+  --fill-tertiary: rgba(118, 118, 128, 0.16);
+  --fill-quaternary: rgba(118, 118, 128, 0.12);
+  --label-primary: #111114;
+  --label-secondary: rgba(60, 60, 67, 0.78);
+  --label-tertiary: rgba(60, 60, 67, 0.56);
+  --label-quaternary: rgba(60, 60, 67, 0.34);
+  --separator-soft: rgba(60, 60, 67, 0.12);
+  --separator-strong: rgba(60, 60, 67, 0.2);
+  --glass-border: rgba(255, 255, 255, 0.48);
+  --glass-shadow: 0 28px 60px rgba(16, 24, 40, 0.08);
+  --shadow-card: 0 16px 32px rgba(15, 23, 42, 0.08);
+}
+
+/* 手动切换：深色 */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg-canvas: #000000;
+  --bg-gradient-top: rgba(24, 28, 34, 0.96);
+  --bg-gradient-bottom: rgba(11, 14, 20, 0.98);
+  --surface-primary: rgba(28, 28, 30, 0.68);
+  --surface-secondary: rgba(36, 36, 38, 0.86);
+  --surface-elevated: rgba(44, 44, 46, 0.92);
+  --fill-tertiary: rgba(118, 118, 128, 0.24);
+  --fill-quaternary: rgba(118, 118, 128, 0.18);
+  --label-primary: rgba(255, 255, 255, 0.96);
+  --label-secondary: rgba(235, 235, 245, 0.72);
+  --label-tertiary: rgba(235, 235, 245, 0.48);
+  --label-quaternary: rgba(235, 235, 245, 0.28);
+  --separator-soft: rgba(84, 84, 88, 0.44);
+  --separator-strong: rgba(84, 84, 88, 0.64);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-shadow: 0 28px 60px rgba(0, 0, 0, 0.28);
+  --shadow-card: 0 18px 34px rgba(0, 0, 0, 0.24);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  min-height: 100%;
+  width: 100%;
+}
+
+html {
+  background: var(--bg-canvas);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-family-system);
+  color: var(--label-primary);
+  background:
+    radial-gradient(circle at top right, rgba(10, 132, 255, 0.12), transparent 34%),
+    radial-gradient(circle at bottom left, rgba(84, 184, 255, 0.12), transparent 32%),
+    linear-gradient(180deg, var(--bg-gradient-top), var(--bg-gradient-bottom));
+  min-height: 100dvh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  transition: background 400ms ease, color 300ms ease;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+input,
+textarea,
+select {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  outline: 0;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--label-quaternary);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+img,
+svg {
+  display: block;
+}
+
+::selection {
+  background: rgba(10, 132, 255, 0.18);
+}
+
+.ios-scroll {
+  overflow-y: auto;
+  overscroll-behavior-y: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.ios-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.glass-surface {
+  background: var(--surface-primary);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+}
+
+.inset-group {
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: var(--surface-elevated);
+  border: 1px solid var(--separator-soft);
+  box-shadow: var(--shadow-card);
+}
+
+.group-row {
+  width: 100%;
+  padding: 1rem 1.125rem;
+  text-align: left;
+}
+
+.group-row + .group-row {
+  border-top: 1px solid var(--separator-soft);
+}
+
+.section-caption {
+  padding: 0 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--label-tertiary);
+}
+
+.state-card {
+  display: grid;
+  justify-items: start;
+  gap: 0.8rem;
+  padding: 1.25rem;
+  border-radius: var(--radius-lg);
+}
+
+.ios-button {
+  min-height: 3.25rem;
+  padding: 0.85rem 1.25rem;
+  border-radius: 999px;
+  font-size: var(--type-headline);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  transition:
+    transform var(--duration-xs) var(--ease-spring),
+    opacity var(--duration-xs) var(--ease-spring),
+    background-color var(--duration-s) var(--ease-spring),
+    box-shadow var(--duration-s) var(--ease-spring);
+}
+
+.ios-button--primary {
+  color: white;
+  background: linear-gradient(180deg, rgba(58, 167, 255, 0.98), rgba(10, 132, 255, 0.96));
+  box-shadow: 0 20px 28px rgba(10, 132, 255, 0.22);
+}
+
+.ios-button--secondary {
+  color: var(--accent-blue);
+  background: var(--surface-secondary);
+  border: 1px solid var(--separator-soft);
+}
+
+.ios-spinner {
+  width: 1.65rem;
+  height: 1.65rem;
+  border-radius: 999px;
+  border: 2.5px solid rgba(118, 118, 128, 0.18);
+  border-top-color: var(--accent-blue);
+  animation: spin 720ms linear infinite;
+}
+
+.pressable {
+  transition:
+    transform var(--duration-xs) var(--ease-spring),
+    opacity var(--duration-xs) var(--ease-spring),
+    box-shadow var(--duration-s) var(--ease-spring),
+    background-color var(--duration-s) var(--ease-spring);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pressable:active {
+  transform: scale(0.972);
+}
+
+.route-spring-enter-active,
+.route-spring-leave-active {
+  transition:
+    transform var(--duration-m) var(--ease-spring),
+    opacity var(--duration-s) var(--ease-spring),
+    filter var(--duration-s) var(--ease-spring);
+}
+
+.route-spring-enter-from {
+  opacity: 0;
+  transform: translate3d(0, 18px, 0) scale(0.985);
+  filter: blur(8px);
+}
+
+.route-spring-leave-to {
+  opacity: 0;
+  transform: translate3d(0, -8px, 0) scale(0.99);
+  filter: blur(6px);
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass-surface {
+    background: var(--surface-elevated);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
